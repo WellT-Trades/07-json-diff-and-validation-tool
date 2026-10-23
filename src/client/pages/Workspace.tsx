@@ -6,6 +6,7 @@ import JsonEditor from "../components/JsonEditor";
 import { CompareResults, ValidationResults } from "../components/Results";
 import { compareJson, parseJson } from "../services/compare";
 import { validateJson } from "../services/validate";
+import { saveComparison } from "../services/comparisonApi";
 import type { DemoUser, JsonChange, ValidationIssue } from "../types";
 type Props = { theme: "dark" | "light"; onToggleTheme: () => void; user: DemoUser | null; onAuth: (m: "login" | "signup") => void; onContact: () => void; onLogout: () => void; onHome: () => void };
 const leftSample = JSON.stringify({ user: { id: 1042, name: "Ari Morgan", role: "editor" }, preferences: { theme: "dark", notifications: true }, tags: ["product", "engineering"] }, null, 2);
@@ -20,8 +21,42 @@ export default function Workspace({ theme, onToggleTheme, user, onAuth, onContac
   const [validation, setValidation] = useState<{ valid: boolean; issues: ValidationIssue[] } | null>(null); const [validated, setValidated] = useState(false);
   const [error, setError] = useState(""); const [menuOpen, setMenuOpen] = useState(false);
   const counts = useMemo(() => ({ added: changes.filter(c => c.kind === "added").length, removed: changes.filter(c => c.kind === "removed").length, changed: changes.filter(c => c.kind === "changed").length }), [changes]);
-  function runCompare() { try { setError(""); setChanges(compareJson(parseJson(left), parseJson(right))); setCompared(true); } catch (e) { setCompared(false); setError(e instanceof Error ? e.message.replace("INVALID_JSON: ", "") : "Could not compare JSON."); } }
-  function runValidate() { try { setError(""); setValidation(validateJson(data, schema)); setValidated(true); } catch (e) { setValidated(false); setError(e instanceof Error ? e.message.replace(/^(INVALID_JSON|INVALID_SCHEMA): /, "") : "Could not validate JSON."); } }
+async function runCompare() {
+  try {
+    setError("");
+
+    const original = parseJson(left);
+    const updated = parseJson(right);
+    const result = compareJson(original, updated);
+
+    setChanges(result);
+    setCompared(true);
+
+    try {
+      const id = await saveComparison({
+        title: `Comparison ${new Date().toLocaleString()}`,
+        original_json: original,
+        updated_json: updated,
+        changes: result,
+      });
+
+      console.log("Comparison saved successfully. ID:", id);
+    } catch (saveError) {
+      setError(
+        saveError instanceof Error
+          ? `Comparison completed, but saving failed: ${saveError.message}`
+          : "Comparison completed, but saving failed.",
+      );
+    }
+  } catch (e) {
+    setCompared(false);
+    setError(
+      e instanceof Error
+        ? e.message.replace("INVALID_JSON: ", "")
+        : "Could not compare JSON.",
+    );
+  }
+}  function runValidate() { try { setError(""); setValidation(validateJson(data, schema)); setValidated(true); } catch (e) { setValidated(false); setError(e instanceof Error ? e.message.replace(/^(INVALID_JSON|INVALID_SCHEMA): /, "") : "Could not validate JSON."); } }
   function reset() { setError(""); setCompared(false); setValidated(false); setChanges([]); setValidation(null); setLeft(leftSample); setRight(rightSample); setData(dataSample); setSchema(schemaSample); }
   return <div className="app-shell">
     <aside className={`sidebar ${menuOpen ? "sidebar-open" : ""}`}><div className="sidebar-top"><Brand onClick={onHome} /><button className="icon-button mobile-only" onClick={() => setMenuOpen(false)}><X size={18} /></button></div>

@@ -1,0 +1,6 @@
+**pycache**/
+*.py[cod]
+comparisons.db
+.venv/
+venv/
+.env
